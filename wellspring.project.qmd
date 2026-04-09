@@ -1,0 +1,681 @@
+---
+title: "What Leads To Positive Engagements? "
+subtitle: "A Statistical Analysis of Member Participation and System Change at Wellspring"
+author: "Andrew Abou Zeid, Daniel Liang, Kevin Lin - TUT0110-F"
+format: beamer
+editor: visual
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(
+  echo = FALSE,      # Hide code
+  include = TRUE,   # Do not include output
+  warning = FALSE,   # Suppress warnings
+  message = FALSE,   # Suppress messages
+  results = TRUE   # Display printed output (can use results=FALSE for a specific code chunk to suppress output)
+)
+
+# Note: the options above are to hide the code chunk in the slides and to not include the code in the slides
+# There are many other options you can use to customize which parts of the code are run / displayed, 
+# as well as how the output is displayed. 
+# You can learn more at https://quarto.org/docs/computations/execution-options.html
+
+```
+
+```{r load-data, include=FALSE, results=FALSE}
+
+# setup
+library(tidyverse)
+library(infer)
+library(knitr)
+
+# Load data we need to load the data, but don't want to display it in our slides
+# The code chunk options at in the curly brackets above specif
+data_patient_members <- read_csv("Member_Background.csv")
+data_attendance_records <- read_csv("Service_Deliveries.csv")
+
+
+## Parse members data
+## Types of cancer - convert to set of indicator variables for different types of cancer (don't include ones which are too rare)
+data_patient_members <- data_patient_members |>
+   mutate(lung = str_detect(types_of_cancer, "Lung"),
+         breast = str_detect(types_of_cancer, "Breast"),
+         brain = str_detect(types_of_cancer, "Brain"),
+         leukemia = str_detect(types_of_cancer, "Leukemia"),
+         prostate = str_detect(types_of_cancer, "Prostate"),
+         colorectal = str_detect(types_of_cancer, "Colorectal"),
+         pancreatic = str_detect(types_of_cancer, "Pancreatic"),
+         lymphoma_non_hodgkins = str_detect(types_of_cancer, "Lymphoma, Non-hodgkins"),
+         liver = str_detect(types_of_cancer, "Liver"),
+         multiple_myeloma = str_detect(types_of_cancer, "Multiple Myeloma"),
+         bladder = str_detect(types_of_cancer, "Bladder"),
+         cervical = str_detect(types_of_cancer, "Cervical"),
+         esophagus = str_detect(types_of_cancer, "Esophagus"),
+         gallbladder_and_bile_duct = str_detect(types_of_cancer, "Gallbladder and Bile Duct"),
+         head_and_neck = str_detect(types_of_cancer, "Head and Neck"),
+         kidney = str_detect(types_of_cancer, "Kidney"),
+         lymphoma_hodgkins = str_detect(types_of_cancer, "Lymphoma, Hodgkins"),
+         ovarian = str_detect(types_of_cancer, "Ovarian"),
+         skin = str_detect(types_of_cancer, "Skin"),
+         stomach = str_detect(types_of_cancer, "Stomach"),
+         testicular = str_detect(types_of_cancer, "Testicular"),
+         thyroid = str_detect(types_of_cancer, "Thyroid"),
+         cervical = str_detect(types_of_cancer, "Cervical"),
+         other = str_detect(types_of_cancer, "Other"))
+
+
+## Impairments - convert to set of indicator variables for different types of impairment (don't include ones which are too rare)
+data_patient_members <- data_patient_members |>
+  mutate(visual = str_detect(i_have_the_following_impairment, "visual"),
+         cognitive = str_detect(i_have_the_following_impairment, "cognitive"),
+         limited_mobility = str_detect(i_have_the_following_impairment, "mobility"),
+         none_of_the_above = str_detect(i_have_the_following_impairment, "None of the above"),
+         other = str_detect(i_have_the_following_impairment, "other"),
+         speech = str_detect(i_have_the_following_impairment, "speech"),
+         hearing = str_detect(i_have_the_following_impairment, "hearing")) 
+
+## Program interests: Split into boolean indicators for different categories
+data_patient_members <- data_patient_members |>
+  mutate(therapeutic_arts = str_detect(program_interest, "Therapeutic Arts"),
+         educational_and_self_developoment = str_detect(program_interest, "Educational & Self-Development"),
+         symptom_management = str_detect(program_interest, "Symptom Management"),
+         social_events = str_detect(program_interest, "Social / Events"),
+         financiaL_and_workplace_strategies = str_detect(program_interest, "Financial & Workplace Strategies"),
+         exercise_and_movement = str_detect(program_interest, "Exercise & Movement"),
+         individual_and_group_support = str_detect(program_interest, "Individual & Group Support")) |>
+  mutate(num_program_interests = therapeutic_arts + educational_and_self_developoment + symptom_management + social_events + financiaL_and_workplace_strategies + exercise_and_movement + individual_and_group_support)
+
+## How did you hear about wellspring: Split into booleans
+data_patient_members <- data_patient_members |>
+  mutate(word_of_mouth = str_detect(how_have_you_heard_of_wellspring, "Word of mouth"),
+         flyer = str_detect(how_have_you_heard_of_wellspring, "flyer"),
+         wellspring_member = str_detect(how_have_you_heard_of_wellspring, "Member"),
+         wellspring_member = str_detect(how_have_you_heard_of_wellspring, "Volunteer"),
+         doctor = str_detect(how_have_you_heard_of_wellspring, "Doctor"),
+         hospital = str_detect(how_have_you_heard_of_wellspring, "hospital"),
+         hospital = str_detect(how_have_you_heard_of_wellspring, "healthcare"),
+         tv = str_detect(how_have_you_heard_of_wellspring, "television"),
+         website = str_detect(how_have_you_heard_of_wellspring, "Website"),
+         family = str_detect(how_have_you_heard_of_wellspring, "Family"),
+         social_media = str_detect(how_have_you_heard_of_wellspring, "Social Media"),
+         other = str_detect(how_have_you_heard_of_wellspring, "Other"))
+
+```
+
+```{r create-new-variables, include=FALSE, results=FALSE}
+# dataset dimensions
+data_attendance_records |> 
+  dim()
+
+# What members register for the most events?
+data_attendance_records |> 
+  group_by(member_id) |>
+  summarise(n=n()) |>
+  arrange(desc(n))
+
+# Let's examine information on the member with the highest attendance
+high_attendance <- data_attendance_records |> 
+  filter(member_id == "003ON000007sHYtYAM")
+
+data_patient_members |> filter(member_id == "003ON000007sHYtYAM")
+
+# What is range of registration dates for members in first table
+data_patient_members |> 
+  group_by(member_start_year) |>
+  summarise(n=n()) |>
+  arrange(desc(n))
+
+#Load and clean data(Declaring my own instead of using the above)
+df_clean <- read_csv("Member_Background.csv") %>%
+  # Select relevant columns
+  select(age_years, number_of_present_service_deliveries, types_of_cancer) %>%
+  # Drop rows with missing values
+  filter(
+    !is.na(age_years),
+    !is.na(number_of_present_service_deliveries),
+    age_years > 0,
+    age_years <= 120
+  )
+
+#Expand cancer types into separate rows
+df_expanded <- df_clean %>%
+  mutate(types_of_cancer = str_split(types_of_cancer, ";")) %>%
+  unnest(types_of_cancer) %>%
+  mutate(types_of_cancer = str_trim(types_of_cancer))
+
+#Build regression models per cancer type
+models_by_cancer <- df_expanded %>%
+  group_by(types_of_cancer) %>%
+  filter(n() >= 10) %>%  # Optional: keep only cancer types with enough data
+  nest() %>%
+  mutate(
+    model = map(data, ~ lm(number_of_present_service_deliveries ~ age_years, data = .x)),
+    summary = map(model, summary)
+  )
+
+
+```
+
+## Project Introduction & Goals
+
+Wellspring is a national charity offering free support programs to individuals affected by cancer. This project aims to help WellSpring to gain insights into member participation.
+
+The population of our data consists of individuals who have registered for Wellspring’s programs.
+
+**Our two main goals are:**
+
+1.  **Assess the Impact of System Change**\
+    Examine how Wellspring’s registration system update (March 4, 2024) has affected member participation.\
+    *Did the change increase accessibility or engagement across the community?*
+
+2.  **Analyze Participation Patterns**\
+    Evaluate how program engagement relates to independent variables such as age, cancer type, or other demographics.\
+    *Are certain characteristics linked to higher or lower engagement?*
+
+------------------------------------------------------------------------
+
+## Data Summary(Research Question 1)
+
+-   **Datasets Used**:
+
+    -   Member Background: contains information about when each member registered, along with personal background details.
+    -   Service Deliveries: tracks all service attendance records for each member, including the date and attendance status.
+
+-   **Key Variables:**
+
+    -   Registration Date: Includes the starting month & year of member.
+
+    -   Event Attendance: Exact date of member attendance.
+
+    -   Filtered on "Present" attendance statuses.
+
+    ```{r, include=FALSE, echo=FALSE}
+    data_members <- data_patient_members |> 
+      mutate(reg_date = make_date(member_start_year, member_start_month, 1))
+
+    data_attendance <- data_attendance_records |> 
+      mutate(att_date = make_date(delivery_year, delivery_month, delivery_day))
+
+    glimpse(data_members)
+    glimpse(data_attendance)
+    ```
+
+------------------------------------------------------------------------
+
+## Data Summary(Research Question 2)
+
+```{r, echo=FALSE, results='asis', message=FALSE, warning=FALSE}
+df_clean_table <- data_patient_members %>%
+  select(age_years, number_of_present_service_deliveries, types_of_cancer) %>%
+  filter(
+    !is.na(age_years),
+    !is.na(number_of_present_service_deliveries),
+    !is.na(types_of_cancer),
+    age_years > 0,
+    age_years <= 120
+  ) %>%
+  rename(
+    "Age" = age_years,
+    "Number of Attendances" = number_of_present_service_deliveries,
+    "Cancer Type" = types_of_cancer
+  )
+
+kable(head(df_clean_table, 3), caption = "Sample of the Cleaned Data")
+```
+
+This new dataset includes **2,503 total observations:**
+
+-   **Age**\
+    Age of each member. Unrealistic or N/A values were removed.
+
+-   **Number of Attendances**\
+    Indicates how many times a member was Present in events.
+
+-   **Cancer Type**\
+    Describes the cancer type(s) for each member. The variable was split and normalized so each row represents one type only.
+
+------------------------------------------------------------------------
+
+## Data Summary(Research Question 3)
+
+```{r, results=TRUE, echo=FALSE}
+
+data_patient_members <- read.csv("Member_Background.csv")
+
+data_needed <- data_patient_members |> 
+  select(age_years, gender, number_of_present_service_deliveries) |> 
+  filter(
+    !is.na(age_years),
+    !is.na(gender),
+    !is.na(number_of_present_service_deliveries),
+    age_years > 0,
+    age_years <= 120
+  )
+```
+
+This dataset contains **2497 observations** and includes the following **three variables**:
+
+1.  **Age (years)**\
+    Indicates the age of individuals, measured in years. This helps analyze trends across different age groups.
+
+<!-- -->
+
+1.  **Gender**\
+    A numeric representation of gender identity. This allows us to compare service engagement between different gender groups.
+
+2.  **Number of Present Service Deliveries**\
+    Shows how many services each person has received or attended. It serves as a key measure of engagement.
+
+------------------------------------------------------------------------
+
+## Research Question 1
+
+**Has the average number of events attended in the first two months post registration changed after the new system update?**
+
+-   Wellspring launched a new registration system on **March 4, 2024**.
+-   They hoped it would improve ease of access and encourage earlier participation
+-   In this analysis, we compare **average attendance within the first 60 days** between members who registered before and after the update.
+
+### Background and Relevance
+
+-   This analysis explores whether this change increased member engagement in the **first 60 days**.
+
+    ```{r}
+    data_members <- data_patient_members |> mutate(reg_date = make_date(member_start_year, member_start_month, 1))
+
+    data_attendance <- data_attendance_records |> mutate(att_date = make_date(delivery_year, delivery_month, delivery_day))
+
+
+    # do not show any of this code on the final version 
+    ```
+
+```{r}
+data_combined <- data_attendance |> 
+  left_join(data_members, by = "member_id") |> 
+  filter(attendance_status == "Present") |> 
+  mutate(days_since_reg = as.numeric(att_date - reg_date)) |> 
+  filter(days_since_reg >= 0 & days_since_reg <= 60) |> 
+  mutate(system_group = if_else(reg_date < as.Date("2024-03-04"), "Before", "After"))
+```
+
+```{r}
+events_by_member <- data_combined |> 
+  group_by(member_id, system_group) |> 
+  summarise(events_60_days = n(), .groups = "drop")
+
+```
+
+------------------------------------------------------------------------
+
+### Method: Randomization Test
+
+-   We split members into two groups based on when they registered:
+    -   "Before" = registered before March 4, 2024
+    -   "After" = registered after
+-   To test whether the observed difference was statistically significant, we used a:
+    -   Randomization (shuffling) test
+    -   Reassigned group labels 1,000 times to simulate a world with no real difference (null hypothesis)
+-   Then we compared our actual result to this simulated distribution.
+
+**Hypotheses**
+
+**- Null Hypothesis (Ho):** The average number of events attended in the first 60 days is the same for members who registered before and after the system update.
+
+**- Alternative Hypothesis (H1):** The average number of events attended in the first 60 days is different for members who registered before and after the system update.
+
+------------------------------------------------------------------------
+
+```{r shuffle-test, echo=FALSE}
+obs_means <- events_by_member |> 
+  group_by(system_group) |> 
+  summarise(mean_events = mean(events_60_days))
+
+obs_diff <- obs_means |> 
+  pivot_wider(names_from = system_group, values_from = mean_events) |> 
+  mutate(diff = After - Before) |> 
+  pull(diff)
+
+set.seed(130)
+n_reps <- 1000
+shuffled_diffs <- numeric(n_reps)
+
+for (i in 1:n_reps) { shuffled_group <- sample(events_by_member$system_group)
+  
+  shuffled_data <- events_by_member |> 
+    mutate(shuffled_group = shuffled_group)
+  
+  means <- shuffled_data |> 
+    group_by(shuffled_group) |> 
+    summarise(mean_events = mean(events_60_days)) |> 
+    pivot_wider(names_from = shuffled_group, values_from = mean_events)
+  
+  diff <- means$After - means$Before
+  shuffled_diffs[i] <- diff
+}
+
+p_val <- mean(abs(shuffled_diffs) >= abs(obs_diff))
+
+hist(shuffled_diffs, main="Randomization Distribution of Differences", 
+     xlab="Difference in Means (After - Before)", breaks=30)
+abline(v = obs_diff, col = "red", lwd = 2)
+```
+
+**Figure 1.** Most of the simulated differences are close to zero. The observed difference of 0.33 (red line) lies far in the tail of the distribution. This result is unlikely to occur by chance (p = 0.002).
+
+------------------------------------------------------------------------
+
+### Did the new registration system increase early engagement?
+
+**Table 1. Average number of events attended in first 60 days by group**
+
+| Group  | Mean Attendance |
+|--------|-----------------|
+| Before | 2.430079        |
+| After  | 2.763427        |
+
+On average, members who registered after the system update attended **0.33 more events**.
+
+We conducted a two-sided randomization test comparing mean event attendance in the first 60 days after registration.
+
+-   The observed difference in mean event attendance in the first 60 days was 0.333348 (After - Before).
+
+-   A randomization test with 1,000 shuffled samples gave a p-value of 0.002.
+
+-   This result is statistically significant, meaning the increase in early engagement after the new registration system is unlikely due to chance.
+
+-   This supports the idea that Wellspring’s new system is helping members get involved earlier.
+
+-   This suggests the new system may be helping members get engaged faster, which is important for improving access to supportive programs early on.
+
+**Figure 1**: Distribution of Events Attended in First 60 Days by Group
+
+------------------------------------------------------------------------
+
+```{r}
+events_by_member |> 
+  ggplot(aes(x = system_group, y = events_60_days)) + geom_boxplot(fill = "light blue", width = 0.4) +
+  labs(title = "Event Attendance within First 60 Days", subtitle = "Comparison by Registration Period",x = "Registration Group",y = "Number of Events Attended") + ylim(0, 20)
+```
+
+**Figure 2.** Members who registered *after* the system update show higher event attendance in the first 60 days, on average.
+
+------------------------------------------------------------------------
+
+## Research Question 2
+
+**Research Question:**\
+Are there any associations between the type of cancer a member has, their age, and their frequency of program attendance at Wellspring?
+
+**Why it matters:**\
+Understanding the link between age, cancer type, and attendance can help Wellspring to:
+
+\- See which groups are more or less engaged.
+
+\- Change & Improve their program offerings accordingly.
+
+\- Improve support for potentially underserved groups.
+
+------------------------------------------------------------------------
+
+## Variables & Method
+
+**Variables used:**
+
+-   **Age** - Age of the member
+-   **Cancer Type** - List of cancer types of members.
+-   **Number of Attendances** Total sessions attended.
+
+**Method:**\
+We used **linear regression** to explore how age and cancer type relate to attendance.
+
+-   **Age** on the x-axis
+-   **Attendance Frequencies** on the y-axis
+-   **Cancer Type** as a grouping variable
+
+This shows trends & associations between variables but not causation.
+
+------------------------------------------------------------------------
+
+## Example Visualization 1: Breast Cancer
+
+```{r, results=TRUE, echo=FALSE, fig.width=7, fig.height=4}
+df_expanded %>%
+  filter(types_of_cancer == "Breast") %>%
+  ggplot(aes(x = age_years, y = number_of_present_service_deliveries)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(
+    title = "Age vs. Attendance for Breast Cancer",
+    x = "Age (Years)",
+    y = "Number of Service Attendances"
+  ) 
+
+```
+
+***Figure 1.*** *Age vs. Attendance for Breast Cancer.*
+
+**OBS:** Slight positive trend — older members with Breast cancer may attend more programs, with peak attendance around the age of 60–75.
+
+------------------------------------------------------------------------
+
+## Example Visualization 2: Colorectal Cancer
+
+```{r, results=TRUE, echo=FALSE, fig.width=7, fig.height=4}
+df_expanded %>%
+  filter(types_of_cancer == "Colorectal") %>%
+  ggplot(aes(x = age_years, y = number_of_present_service_deliveries)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(
+    title = "Age vs. Attendance for Colorectal Cancer",
+    x = "Age (Years)",
+    y = "Number of Service Attendances"
+  )
+```
+
+***Figure 2.*** *Age vs. Attendance for Colorectal Cancer.*
+
+**OBS:** Trend is flatter — age appears to have less impact on attendance for this group in terms of attendance rates.
+
+------------------------------------------------------------------------
+
+## What Can The Data Tell Us?
+
+-   The effect of age on attendance differs across cancer types
+
+-   Some cancers (like Breast cancer) show age-based engagement trends
+
+-   Others (like Colorectal) are more stable across age
+
+**For Wellspring:**
+
+-   Insights support data-informed program planning
+
+-   Helps identify which age/cancer groups to target with engagement strategies
+
+-   Encourages resource optimization based on real usage patterns
+
+------------------------------------------------------------------------
+
+## Research Question 3
+
+**Question**: Can we have higher attendance rates based on information about member characteristics, such as age and gender?
+
+**Motivation**:
+
+1.  Wellspring can benefit from distinguishing which member backgrounds are more effective in increasing attendance rates.
+2.  By identifying specific factors that influence attendance rates, Wellspring can examine them more closely and make its program more accessible to these.
+
+**Method**
+
+1.  Boxplots display attendance distribution for each group, highlighting the median, quartiles, and outliers for easy comparison among genders and age groups.
+2.  Multiple linear regression model method with age and gender as two major predictors and number_of_present_service_deliveries as the y-value, which is the response variable.
+
+------------------------------------------------------------------------
+
+## Boxplot by age and gender
+
+::::: columns
+::: {.column width="50%"}
+```{r}
+library(dplyr)
+library(ggplot2)
+
+
+data <- data_needed %>%
+  mutate(age_group = cut(age_years, 
+                         breaks = c(0, 19, 29, 39, 49, 59, Inf), 
+                         labels = c("Under 20", "20s", "30s", "40s", "50s", "60+"),
+                         right = TRUE))
+
+
+ggplot(data, aes(x = age_group, y = number_of_present_service_deliveries)) +
+  geom_boxplot() +
+  labs(title = "Attendance by Age Group", 
+       x = "Age Group", 
+       y = "Number of Present Service Deliveries") +
+  coord_cartesian(ylim = c(0, 30))
+
+
+```
+:::
+
+::: {.column width="50%"}
+```{r}
+ggplot(data, aes(x = gender, y = number_of_present_service_deliveries)) +
+  geom_boxplot() +
+  labs(title = "Attendance by Gender", 
+       x = "Gender", 
+       y = "Number of Present Service Deliveries") +
+  coord_cartesian(ylim = c(0, 50)) 
+```
+:::
+:::::
+
+------------------------------------------------------------------------
+
+## Multiple Regression Model
+
+```{r}
+data_needed <- data_needed |>
+  filter(age_years >=0)
+
+data_needed <- data_needed |>
+  filter(gender %in% c("Male", "Female"))
+
+model1<-lm(number_of_present_service_deliveries~age_years * gender,data=data_needed)
+ggplot(data_needed, 
+       aes(x = age_years, y = number_of_present_service_deliveries, color = gender)) +
+ 
+  geom_point(alpha = 0.4) +
+  
+  geom_smooth(method = "lm",se=FALSE) +
+  labs(
+    title = "Predicted Attendance by Age and Gender",
+    x = "Age",
+    y = "Number of Present Service Deliveries"
+  ) +
+  theme_bw()
+
+```
+
+------------------------------------------------------------------------
+
+## Term; Meaning; Effect; P-value:
+
+|                    |                             |           |          |
+|--------------------|-----------------------------|-----------|----------|
+| **Age (in years)** | attendance increases by age | **+0.12** | p = 0.73 |
+
+|  |  |  |  |
+|------------------|--------------------|------------------|------------------|
+| **Male vs baseline gender** | Males attended less than the baseline gender | **−1.74** | p = 0.73 |
+
+|  |  |  |  |
+|------------------|------------------|------------------|------------------|
+| **Non-binary vs baseline** | Non-binary individuals attended less | **−8.03** | p = 0.71 |
+
+|                 |                                        |           |          |
+|------------------|------------------|------------------|------------------|
+| **Interaction** | Age affects males slightly differently | **−0.02** | p = 0.78 |
+
+------------------------------------------------------------------------
+
+## Conclusions of Boxplots:
+
+Attendance by Gender:
+
+-   The Female group shows a wide range of attendance, with many high-value outliers.
+-   Male attendance also varies but with fewer extremely high outliers compared to females.
+-   The non-Binary group have a relatively lower median attendance and fewer outliers, indicating less variability in those groups.
+
+Attendance by Age Group:
+
+-   Under 20 and 20s show relatively low and tight distributions of attendance.
+-   The 30s begin to show more variability but still fewer very high outliers.
+-   The 40s, 50s, and 60+ age groups exhibit some individuals in these older groups attend significantly more often.
+
+------------------------------------------------------------------------
+
+## Conclusion of regression model:
+
+-   **Age (in years)**(coefficient = 0.12, p =0.0015): The number of service attendances increases by about 0.12 units for each additional year of age**.** The p-value suggests that age is a meaningful predictor of attendance.
+
+-   **Male vs baseline gender**(coefficient = -1.74, p =0.73): Males attend about 1.74 fewer services on average than females. This p-value indicates that the gender difference is insignificant.
+
+-   **Non-binary vs baseline**(coefficient = -8.03,p = 0.71)**:** Non-binary individuals attended about 8 fewer services than the baseline group (likely females), on average. However, we don't have the evidence to say the difference is real, probably due to the small sample size.
+
+-   **Interaction** (coefficient = -0.02, p=0.78): Males attend about 0.02 fewer services on average than females. The high p-value indicates no significant evidence suggesting that the relationship between age and gender. \|
+
+## Limitations
+
+(1) 
+
+-   **Only examines first 60 days**\
+    no insight into long-term engagement
+
+-   **Doesn’t account for factors like demographics or program type**\
+
+(2) 
+
+-   **Missing or Inaccurate Data:**\
+    Some members have missing (`NA`) or invalid values for key variables such as age and attendance. For example, unrealistic values like a `-51` for variable `age` appeared in the dataset and had to be removed.
+
+-   **Data Quality & Consistency:**\
+    Cancer types are recorded as free-text strings (sometimes multiple per person), which introduces inconsistencies and required manual cleaning & splitting. \### Limitations
+
+------------------------------------------------------------------------
+
+## Limitations Cont'd
+
+-   **The outliers & medians for boxplots:**\
+    They are way too significant for the plots. The medians based on different categories are not visual enough for the audience to read.
+
+-   **The lack of diversity:**\
+    The number of other gender identifications is too small for us to make a model, which leads to the lack of diversity in this research question.(ie. One of our predictors is not statistically significant.)\
+    **Suggestions for Future Work:**\
+
+-   More samples could be retrieved or data could be gathered for a longer period of time
+
+-   Improve data validation & Formatting at the time of entry to reduce errors
+
+-   Conduct follow-up studies which potentially explore additional variables to increase the diversity of the study
+
+------------------------------------------------------------------------
+
+## Conclusion
+
+**Some Key Insights:**
+
+-   The **registration system update** at Wellspring appears to be associated with increased engagement, especially in the early stages of membership.
+
+-   **Age** is a meaningful factor — older members, particularly between 60–75 years, tend to participate more in programs.
+
+-   **Cancer type** also influences participation trends, with certain groups (e.g., Breast cancer) showing higher attendance patterns.
+
+**Implications for Wellspring:**
+
+-   These results can help guide **program design and outreach**, focusing on the needs of specific age and cancer-type groups.
+
+-   Continuing to track engagement trends post-registration will help assess the **long-term impact** of system changes and/or to make some future improvements.
